@@ -19,10 +19,34 @@
 
 The function type object.
 
+* The function type could have a `globalScope` and `global` object.
+  * the `global` object can not be exported. used to expose the functions.
+  * the `globalScope` object can be exported.
+* the function value could have `scope` object.
+  * the `scope` object can be exported.
+
+the `globalScope` and `scope` can specify the `global` function to use.
+It must be enclosed in '\`'.
+
 ## Usage
 
 ```js
-var Type  = require('function-type')
+var FunctionType  = require('function-type')
+var Func = FunctionType({
+  globalScope:{
+    hi: 'hi '
+    , echo: '`echo`'
+    , log: '`log`'
+  }
+  , global: {
+      echo: function(a){return a}
+    , log: console.log
+  }
+})
+var f = Func.create('function print(a){log(hi+title+a)}', {scope:{title:'myTest:'}})
+f.valueOf()('123')
+//='hi myTest:123'
+
 ```
 
 ## API
