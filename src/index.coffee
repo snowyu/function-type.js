@@ -2,14 +2,17 @@ isString        = require 'util-ex/lib/is/type/string'
 isFunction      = require 'util-ex/lib/is/type/function'
 isFunctionStr   = require 'util-ex/lib/is/string/function'
 isObject        = require 'util-ex/lib/is/type/object'
-extend          = require 'util-ex/lib/extend'
+extend          = require 'util-ex/lib/_extend'
+#TODO: should use vm.createInContext? https://github.com/dfkaye/vm-shim
 createFunc      = require 'util-ex/lib/_create-function'
 Attributes      = require 'abstract-type/lib/attributes'
 Type            = require 'abstract-type'
+GlobalScope     = require './global-scope'
+FunctionValue   = require './value'
 register        = Type.register
 aliases         = Type.aliases
 
-getObjKey = (obj, value)->
+getObjKeyByValue = (obj, value)->
   for k,v of obj
     return k if v is value
 
@@ -20,40 +23,55 @@ module.exports = class FunctionType
   constructor: ->
     return super
 
+  ValueType: FunctionValue
   $attributes: Attributes
-    scope:
+    globalScope:
       type: 'Object'
-    $globalScope:
+    global:
+      exported: false
       type: 'Object'
+      assigned: '' #enable smart-assignment
+      assign: (value, dest)->
+        result = new GlobalScope
+        extend result, value
 
   _assign: (aOptions)->
     if aOptions
-      vGlobalScope = aOptions.globalScope or aOptions.$globalScope
-      @$globalScope = extend {}, vGlobalScope if isObject vGlobalScope
-      vGlobalScope = @$globalScope
+      vGlobal = @$attributes.getValue aOptions, 'global'
+      @global = extend new GlobalScope, vGlobal if isObject vGlobal
+      vGlobal = @global
 
-      vScope = aOptions.scope
-      if vGlobalScope
-        for k,v of vScope
-          if isString(v) and vGlobalScope[v]?
-            vScope[k] = vGlobalScope[v]
-      @scope = extend {}, vScope
+      vGlobalScope = aOptions.globalScope
+      @globalScope = extend {}, vGlobalScope
+      vGlobal.toScope @globalScope if vGlobal
     return
 
-  valueToString: (aValue)->String(aValue)
-  toValue: (aValue)->
+  toValue: (aValue, aOptions)->
+    vScope = aOptions && aOptions.scope
+    if isObject aValue
+      vValueScope = aValue.scope
+      aValue = aValue.function
+    if isFunction(aValue)
+      if !aValue.hasOwnProperty('scope') or vScope
+        aValue = String(aValue)
+        vValueScope = aValue.scope
+      else
+        result = aValue
     if isString aValue
-      createFunc aValue, @scope
-    else
-      aValue
+      if vScope or vValueScope
+        vValueScope = extend {}, vValueScope, vScope
+        @global.toScope vValueScope if @global
+        vScope = extend {}, @globalScope, vValueScope if @globalScope
+      result = createFunc aValue, vScope
+      result.scope = vValueScope
+    result
+
   _toObject: (aOptions)->
     result = super
-    vScope = result.scope
-    vGlobal = @$globalScope
-    if isObject(vScope) and isObject vGlobal
-      for k,v of vScope
-        vName = getObjKey(vGlobal, v)
-        vScope[k] = vName if vName
+    vScope = result.globalScope
+    vGlobal = @global
+    vGlobal.toName vScope if isObject(vScope) and isObject vGlobal
     result
+
   _validate: (aValue, aOptions)->
     isFunction(aValue) or isFunctionStr(aValue)

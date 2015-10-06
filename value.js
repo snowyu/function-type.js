@@ -1,1 +1,1 @@
-module.exports = require('abstract-type/lib').Value;
+module.exports = require('./lib/value');
